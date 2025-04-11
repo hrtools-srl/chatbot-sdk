@@ -1,5 +1,96 @@
+import { EventEmitter } from 'events';
+import NodeEventSource from 'eventsource';
 import { FromSchema } from 'json-schema-to-ts';
 import { Axios, CreateAxiosDefaults, AxiosRequestConfig } from 'axios';
+
+type CommonStreamData = {
+    messageId: number;
+};
+type StreamDocumentChunk = {
+    id: number;
+    content: string;
+};
+type StreamDocument = {
+    id: number;
+    name: string;
+    chunks: StreamDocumentChunk[];
+};
+type ErrorStreamData = CommonStreamData & {
+    type: "ERROR";
+    code: string;
+    message: string;
+};
+type EndStreamData = CommonStreamData & {
+    type: "END";
+    data: {
+        content: string;
+        documents: StreamDocument[];
+    } | null;
+    error: {
+        code: string;
+        message: string;
+    } | null;
+};
+type DocumentContextStreamData = CommonStreamData & {
+    type: "DOCUMENT_CONTEXT";
+    documents: StreamDocument[];
+};
+type ChunkStreamData = CommonStreamData & {
+    type: "CHUNK";
+    content: string;
+    index: number;
+};
+type ChunkAggregateStreamData = CommonStreamData & {
+    type: "CHUNK_AGGREGATE";
+    fromIndex: number;
+    toIndex: number;
+    content: string;
+};
+type StreamData = (DocumentContextStreamData | ErrorStreamData | EndStreamData | ChunkStreamData | ChunkAggregateStreamData);
+type IterableChunkData = {
+    content: string;
+    index: number;
+};
+type ConversationEventEmitterMap = {
+    data: [StreamData];
+    chunk: [ChunkStreamData];
+    "chunk-aggregate": [ChunkAggregateStreamData];
+    "document-context": [DocumentContextStreamData];
+    end: [EndStreamData];
+    error: [unknown];
+};
+type ConversationEventEmitter = EventEmitter<ConversationEventEmitterMap>;
+type CompletionAsyncIterable = AsyncIterable<IterableChunkData> & {
+    messageId: number;
+    documents: StreamDocument[] | null;
+    error: {
+        code: string;
+        message: string;
+    } | null;
+    partial: string;
+    _chunks: {
+        content: string;
+        index: number;
+    }[];
+};
+type SyncResponse = {
+    messageId: number;
+    content: string;
+    documents: StreamDocument[];
+};
+
+type Request$3 = {
+    conversationId: number;
+};
+type Response$4 = ConversationEventEmitter;
+
+type Request$2 = {
+    prompt: string;
+    conversationId: number;
+};
+type Response$3 = {
+    messageId: number;
+};
 
 declare const conversationSchema: {
     readonly type: "object";
@@ -44,11 +135,15 @@ declare const conversationSchema: {
 };
 
 type ChatbotSDKBaseConfig = {
-  authToken: string,
+  authToken?: string,
   baseUrl?: string,
+  EventSource?: ConversationEventSourceClass
 }
 
 type Conversation = FromSchema<typeof conversationSchema>
+
+type ConversationEventSourceClass = typeof NodeEventSource | typeof EventSource
+type ConversationEventSourceInstance = InstanceType<ConversationEventSourceClass>
 
 type Response$2 = Conversation[];
 
@@ -57,20 +152,27 @@ type Request$1 = {
 };
 type Response$1 = Conversation;
 
-type Request = {
+type Request<STREAM extends boolean> = {
     prompt: string;
     conversationId: number;
+    stream?: STREAM;
 };
-type Response = unknown;
+type Response<STREAM extends boolean> = STREAM extends true ? CompletionAsyncIterable : Promise<SyncResponse>;
 
 declare class ChatbotSDK {
     axios: Axios;
-    constructor(config: ChatbotSDKBaseConfig, axiosConfig?: CreateAxiosDefaults);
-    setAuthToken(token: string): void;
+    private EventSource;
+    private authToken?;
+    private baseURL;
+    constructor(config?: ChatbotSDKBaseConfig, axiosConfig?: CreateAxiosDefaults);
+    setAuthToken(token?: string): void;
     call: <T>(request: AxiosRequestConfig) => Promise<T>;
-    chatCompletion: (_request: Request, _options?: AxiosRequestConfig) => Promise<Response>;
-    getConversation: (request: Request$1, options?: AxiosRequestConfig) => Promise<Response$1>;
-    listConversations: (options?: AxiosRequestConfig) => Promise<Response$2>;
+    chat: <STREAM extends boolean>(request: Request<STREAM>) => Promise<Response<STREAM>>;
+    getConversation: (request: Request$1) => Promise<Response$1>;
+    listConversations: () => Promise<Response$2>;
+    sendMessage: (request: Request$2) => Promise<Response$3>;
+    getConversationEventEmitter: (request: Request$3) => Promise<Response$4>;
+    _getConversationStream: (conversationId: number) => Promise<ConversationEventSourceInstance>;
 }
 
 export { ChatbotSDK as default };

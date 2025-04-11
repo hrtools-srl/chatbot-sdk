@@ -2,9 +2,7 @@
   "include": [
     "src",
     "types",
-    "eslint.config.mjs"
-  ],
-  "exclude": [
+    "eslint.config.mjs",
     "test"
   ],
   "compilerOptions": {
@@ -14,6 +12,7 @@
       "$components/*": ["src/components/*"],
       "$modules/*": ["src/modules/*"],
       "$utils/*": ["src/utils/*"],
+      "$utils": ["src/utils/index.ts"],
       "$src/*": ["src/*"],
       "$src": ["src/index.ts"],
       "$schemas/*": ["src/schemas/*"],
@@ -28,7 +27,7 @@
     "target": "ES6",
     "declaration": true,
     "sourceMap": true,
-    "rootDir": "./src",
+    "rootDir": ".",
     "strict": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,

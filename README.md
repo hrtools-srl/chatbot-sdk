@@ -39,17 +39,22 @@ Then, import and initialize the SDK:
 ```ts
 import ChatbotSDK from "@hrtools/chatbot-sdk"
 
+const sdk = new ChatbotSDK()
+
+
+// or
+
 const sdk = new ChatbotSDK({
-  authToken: "your-auth-token"
+  authToken: "your-token"
 })
 ```
 
 ## Refresh token
 
-If you need to refresh the token, you can do so by calling the `refreshToken` method.
+If you need to refresh (or set) the token, you can do so by calling the `setAuthToken` method.
 
 ```ts
-sdk.refreshToken("your-refresh-token")
+sdk.setAuthToken("your-token")
 ```
 
 ## Method getConversation
@@ -72,24 +77,158 @@ const conversations = await sdk.listConversations()
 console.log("Conversations:", conversations)
 ```
 
-## Method chatCompletion (WORK IN PROGRESS)
+## Method chat - without streaming
 
-Send a prompt to the chatbot and receive a response as [AsyncIterator](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/AsyncIterator).
+Send a prompt to the chatbot and receive a response.
 
 ```ts
-const stream = await sdk.chatCompletion({
+const response = await sdk.chat({
   conversationId: 123,
-  prompt: "Hello world!"
+  prompt: "Hello world!",
+  stream: false // default
 })
 
-for await (const event of stream) {
-  console.log(event)
+console.log("Assistant message:", response.content)
+console.log("RAG documents", response.documents)
+console.log("Message ID:", response.messageId)
+```
+
+## Method chat - with streaming
+
+Send a prompt to the chatbot and receive a response as [AsyncIterator](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/AsyncIterator) with additional properties.
+
+This method permits streaming responses, allowing you to process the response as it arrives. You can also access the assistant response with `getConversationEventEmitter` method.
+
+```ts
+const stream = await sdk.chat({
+  conversationId: 123,
+  prompt: "Hello world!",
+  stream: true
+})
+
+console.log("Message ID:", stream.messageId)
+
+console.log("Assistant message:")
+for await (const chunk of stream) {
+  process.stdout.write(chunk.content)
+  // The partial response is also available in the stream.partial
+}
+
+console.log("RAG documents", stream.documents)
+
+```
+
+## Method getConversationEventEmitter
+
+The `getConversationEventEmitter` method returns an [`EventEmitter`](https://nodejs.org/api/events.html) instance, allowing you to listen to events from a streaming conversation. This is useful when you need real-time handling of chatbot responses and related events.
+
+```ts
+const emitter = sdk.getConversationEventEmitter({
+  conversationId: 123
+})
+
+// "data" event includes all the data received from the chatbot, more granular events are also available above
+// emitter.on("data", (data) => {
+//   console.log("Received data:", data.content)
+// })
+
+emitter.on("chunk", (data) => {
+  console.log("Received chunk:", data.content)
+})
+
+emitter.on("chunk-aggregate", (data) => {
+  console.log("Aggregated content from chunks:", data.content)
+})
+
+emitter.on("document-context", (data) => {
+  console.log("Related documents:", data.documents)
+})
+
+emitter.on("end", () => {
+  console.log("Streaming ended")
+})
+
+emitter.on("error", (err) => {
+  console.error("Error occurred:", err)
+})
+```
+
+### Available Events
+
+The emitter provides the following events, corresponding to different types of streamed responses:
+
+| Event                | Description                                                          | Payload                                |
+|----------------------|----------------------------------------------------------------------|----------------------------------------|
+| `data`               | Fired for every received stream data (raw event).                    | `StreamData`                           |
+| `chunk`              | Fired for each content chunk received from the chatbot.              | `ChunkStreamData`                      |
+| `chunk-aggregate`    | Fired when multiple chunks are aggregated into a single message.     | `ChunkAggregateStreamData`             |
+| `document-context`   | Fired when the chatbot provides related document context.            | `DocumentContextStreamData`            |
+| `end`                | Fired when the stream finishes successfully.                         | `EndStreamData`                        |
+| `error`              | Fired when an error occurs during streaming or connection.           | `unknown`   |
+
+### Event Payload Types
+
+- **ChunkStreamData**
+
+```ts
+{
+  type: "CHUNK",
+  messageId: number,
+  content: string,
+  index: number
+}
+```
+
+- **ChunkAggregateStreamData**
+
+```ts
+{
+  type: "CHUNK_AGGREGATE",
+  messageId: number,
+  fromIndex: number,
+  toIndex: number,
+  content: string
+}
+```
+
+- **DocumentContextStreamData**
+
+```ts
+{
+  type: "DOCUMENT_CONTEXT",
+  messageId: number,
+  documents: Array<{
+    id: number,
+    name: string,
+    chunks: Array<{ id: number, content: string }>
+  }>
+}
+```
+
+- **EndStreamData**
+
+```ts
+{
+  type: "END",
+  messageId: number,
+  data: {
+    content: number,
+    documents: Array<{
+      id: number,
+      name: string,
+      chunks: Array<{ id: number, content: string }>
+    }>
+  } | null,
+  error: {
+    code: string,
+    message: string
+  } | null
 }
 ```
 
 ## Error Handling
 
-All SDK methods throw API errors directly if available in the response.
+`getConversation` and `listConversations` methods throw API errors directly if available in the response.
 
 ```ts
 try {
@@ -110,25 +249,4 @@ const sdk = new ChatbotSDK({
   authToken: "your-auth-token",
   baseUrl: "https://custom.it"
 })
-```
-
-### Custom axios request configuration
-
-You can pass an optional Axios request configuration as additional parameters to the SDK methods.
-
-```ts
-const conversation = await sdk.getConversation({ conversationId: 123 }, { timeout: 5000 })
-
-console.log("Conversation:", conversation)
-```
-
-### Custom axios instance configuration
-
-You can pass an optional Axios instance configuration as the second parameter to the SDK constructor.
-
-```ts
-const sdk = new ChatbotSDK(
-  { authToken: "your-auth-token" },
-  { timeout: 5000 } // Axios config
-)
 ```

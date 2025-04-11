@@ -1,6 +1,8 @@
 'use strict';
 
 var axios = require('axios');
+var tsPattern = require('ts-pattern');
+var events = require('events');
 
 function _interopDefault (e) { return e && e.__esModule ? e : { default: e }; }
 
@@ -10,6 +12,7 @@ var __defProp = Object.defineProperty;
 var __getOwnPropSymbols = Object.getOwnPropertySymbols;
 var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __propIsEnum = Object.prototype.propertyIsEnumerable;
+var __knownSymbol = (name, symbol) => (symbol = Symbol[name]) ? symbol : Symbol.for("Symbol." + name);
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __spreadValues = (a, b) => {
   for (var prop in b || (b = {}))
@@ -42,27 +45,200 @@ var __async = (__this, __arguments, generator) => {
     step((generator = generator.apply(__this, __arguments)).next());
   });
 };
-
-// src/operations/chatCompletion.ts
-var chatCompletion_default = (_sdk) => (_request, _options) => {
-  throw new Error("Not implemented");
+var __await = function(promise, isYieldStar) {
+  this[0] = promise;
+  this[1] = isYieldStar;
 };
+var __asyncGenerator = (__this, __arguments, generator) => {
+  var resume = (k, v, yes, no) => {
+    try {
+      var x = generator[k](v), isAwait = (v = x.value) instanceof __await, done = x.done;
+      Promise.resolve(isAwait ? v[0] : v).then((y) => isAwait ? resume(k === "return" ? k : "next", v[1] ? { done: y.done, value: y.value } : y, yes, no) : yes({ value: y, done })).catch((e) => resume("throw", e, yes, no));
+    } catch (e) {
+      no(e);
+    }
+  }, method = (k) => it[k] = (x) => new Promise((yes, no) => resume(k, x, yes, no)), it = {};
+  return generator = generator.apply(__this, __arguments), it[__knownSymbol("asyncIterator")] = () => it, method("next"), method("throw"), method("return"), it;
+};
+var parseEventMessage = (event) => {
+  try {
+    if (event.type === "message" && event.data) {
+      const data = JSON.parse(event.data);
+      return data;
+    }
+  } catch (_) {
+  }
+  return null;
+};
+var conversationEventSourceToEventEmitter = (eventSource) => {
+  const emitter = new events.EventEmitter();
+  const processMessage = (event) => {
+    emitter.emit("data", event);
+    tsPattern.match(event).with({ type: "DOCUMENT_CONTEXT" }, (value) => emitter.emit("document-context", value)).with({ type: "ERROR" }, (value) => emitter.emit("error", value)).with({ type: "END" }, (value) => emitter.emit("end", value)).with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value)).with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value)).exhaustive();
+  };
+  eventSource.onmessage = (event) => {
+    const data = parseEventMessage(event);
+    if (data) {
+      processMessage(data);
+    }
+  };
+  eventSource.onerror = (error) => {
+    emitter.emit("error", error);
+  };
+  return emitter;
+};
+var messageEventSourceToAsyncIterable = (eventSource, messageId) => {
+  let done = false;
+  const queue = [];
+  let waitForChunkResolveFunction = void 0;
+  const waitForChunk = () => new Promise((resolve) => waitForChunkResolveFunction = resolve);
+  function end() {
+    done = true;
+    waitForChunkResolveFunction == null ? void 0 : waitForChunkResolveFunction();
+    waitForChunkResolveFunction = void 0;
+    eventSource.close();
+  }
+  const processMessage = (event) => {
+    if (event.messageId !== messageId) {
+      return;
+    }
+    tsPattern.match(event).with({ type: "DOCUMENT_CONTEXT" }, (value) => {
+      out.documents = value.documents;
+    }).with({ type: "ERROR" }, (value) => {
+      out.error = {
+        code: value.code,
+        message: value.message
+      };
+      end();
+    }).with({ type: "CHUNK" }, (event2) => {
+      const value = {
+        content: event2.content,
+        index: event2.index
+      };
+      out._chunks.push(value);
+      queue.push(value);
+      waitForChunkResolveFunction == null ? void 0 : waitForChunkResolveFunction();
+      waitForChunkResolveFunction = void 0;
+    }).with({ type: "CHUNK_AGGREGATE" }, () => {
+    }).with({ type: "END" }, () => end()).exhaustive();
+  };
+  eventSource.onerror = (error) => {
+  };
+  eventSource.onmessage = (event) => {
+    const data = parseEventMessage(event);
+    if (data) {
+      processMessage(data);
+    }
+  };
+  const out = {
+    messageId,
+    documents: null,
+    error: null,
+    _chunks: [],
+    get partial() {
+      return this._chunks.sort((a, b) => a.index - b.index).map((chunk) => chunk.content).join("");
+    },
+    [Symbol.asyncIterator]() {
+      return __asyncGenerator(this, null, function* () {
+        while (true) {
+          const value = queue.shift();
+          if (value) {
+            yield value;
+          } else {
+            if (done) {
+              return;
+            }
+            yield new __await(waitForChunk());
+          }
+        }
+      });
+    }
+  };
+  return out;
+};
+var messageEventSourceToSyncResponse = (eventSource, messageId) => __async(void 0, null, function* () {
+  let resolve;
+  let reject;
+  const mainPromise = new Promise((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  const processMessage = (event) => {
+    if (event.messageId !== messageId) {
+      return;
+    }
+    if (event.type === "END") {
+      if (event.data) {
+        resolve({
+          messageId: event.messageId,
+          content: event.data.content,
+          documents: event.data.documents
+        });
+      }
+      if (event.error) {
+        reject({
+          code: event.error.code,
+          message: event.error.message
+        });
+      }
+      reject();
+    }
+    if (event.type === "ERROR") {
+      reject({
+        code: event.code,
+        message: event.message
+      });
+    }
+  };
+  eventSource.onerror = (error) => {
+    reject(error);
+  };
+  eventSource.onmessage = (event) => {
+    const data = parseEventMessage(event);
+    if (data) {
+      processMessage(data);
+    }
+  };
+  return mainPromise;
+});
+
+// src/operations/chat.ts
+var chat_default = (sdk) => (request) => __async(void 0, null, function* () {
+  const evt = yield sdk._getConversationStream(request.conversationId);
+  const { messageId } = yield sdk.sendMessage({ conversationId: request.conversationId, prompt: request.prompt });
+  if (request.stream) {
+    return messageEventSourceToAsyncIterable(evt, messageId);
+  } else {
+    return messageEventSourceToSyncResponse(evt, messageId);
+  }
+});
 
 // src/operations/getConversation.ts
-var getConversation_default = (sdk) => (request, options) => {
-  return sdk.call(__spreadValues({
-    method: "get",
-    url: `/get_conversation/${request.conversationId}`
-  }, options));
-};
+var getConversation_default = (sdk) => (request) => sdk.call({
+  method: "get",
+  url: `/get_conversation/${request.conversationId}`
+});
 
 // src/operations/listConversations.ts
-var listConversations_default = (sdk) => (options) => {
-  return sdk.call(__spreadValues({
-    method: "get",
-    url: "/list_conversations"
-  }, options));
-};
+var listConversations_default = (sdk) => () => sdk.call({
+  method: "get",
+  url: "/list_conversations"
+});
+
+// src/operations/getConversationEventEmitter.ts
+var getConversationEventEmitter_default = (sdk) => (request) => __async(void 0, null, function* () {
+  const evt = yield sdk._getConversationStream(request.conversationId);
+  return conversationEventSourceToEventEmitter(evt);
+});
+
+// src/operations/sendMessage.ts
+var sendMessage_default = (sdk) => (request) => __async(void 0, null, function* () {
+  return sdk.call({
+    method: "post",
+    url: "/send_message",
+    data: request
+  });
+});
 
 // src/index.ts
 var ChatbotSDK = class {
@@ -81,16 +257,41 @@ var ChatbotSDK = class {
         throw error;
       }
     });
-    this.chatCompletion = chatCompletion_default();
+    this.chat = chat_default(this);
     this.getConversation = getConversation_default(this);
     this.listConversations = listConversations_default(this);
+    this.sendMessage = sendMessage_default(this);
+    this.getConversationEventEmitter = getConversationEventEmitter_default(this);
+    this._getConversationStream = (conversationId) => __async(this, null, function* () {
+      return (
+        // TODO use the auth token
+        new this.EventSource(`${this.baseURL}/conversation_stream/${conversationId}`)
+      );
+    });
+    if (config == null ? void 0 : config.EventSource) {
+      this.EventSource = config.EventSource;
+    } else {
+      const EventSource = window.EventSource;
+      if (!EventSource) {
+        throw new Error("EventSource is not available. Please provide an eventsource instance.");
+      }
+      this.EventSource = EventSource;
+    }
+    this.baseURL = (config == null ? void 0 : config.baseUrl) || "https://api.hrtools.it";
     this.axios = axios__default.default.create(__spreadValues({
-      baseURL: config.baseUrl || "https://api.hrtools.it"
+      baseURL: this.baseURL
     }, axiosConfig || {}));
-    this.setAuthToken(config.authToken);
+    this.setAuthToken(config == null ? void 0 : config.authToken);
   }
   setAuthToken(token) {
-    this.axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+    if (token) {
+      this.axios.defaults.headers.common["Authorization"] = `Bearer ${token}`;
+      this.authToken = token;
+    } else {
+      delete this.axios.defaults.headers.common["Authorization"];
+      this.authToken = void 0;
+    }
+    this.authToken = token;
   }
 };
 

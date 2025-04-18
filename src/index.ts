@@ -71,8 +71,13 @@ export default class ChatbotSDK {
   sendMessage = sendMessage(this)
   getConversationEventEmitter = getConversationEventEmitter(this)
 
-  _getConversationStream = async(conversationId: number): Promise<ConversationEventSourceInstance> => (
-    // TODO use the auth token
-    new this.EventSource(`${this.baseURL}/public/conversations/${conversationId}/stream`)
-  )
+  _getConversationStream = async(conversationId: number): Promise<ConversationEventSourceInstance> => {
+    const url = new URL(`${this.baseURL}/public/conversations/${conversationId}/stream`)
+
+    if (this.authToken) {
+      url.searchParams.append("authToken", this.authToken)
+    }
+
+    return new this.EventSource(url)
+  }
 }

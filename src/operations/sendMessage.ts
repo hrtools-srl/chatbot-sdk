@@ -12,7 +12,7 @@ export type Response = {
 export default (sdk: ChatbotSDK) => async (request: Request): Promise<Response> => (
   sdk.call({
     method: "post",
-    url: "/send_message",
+    url: "/public/messages",
     data: request
   })
 )

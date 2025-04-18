@@ -6,6 +6,6 @@ export type Response = Conversation[]
 export default (sdk: ChatbotSDK) => (): Promise<Response> => (
   sdk.call({
     method: "get",
-    url: "/list_conversations"
+    url: "/public/conversations"
   })
 )

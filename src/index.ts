@@ -27,7 +27,7 @@ export default class ChatbotSDK {
       this.EventSource = EventSource
     }
 
-    this.baseURL = config?.baseUrl || "https://api.hrtools.it"
+    this.baseURL = config?.baseUrl || "https://chatbot.hrtools.it"
     this.axios = axios.create({
       baseURL: this.baseURL,
       ...(axiosConfig || {}),
@@ -73,6 +73,6 @@ export default class ChatbotSDK {
 
   _getConversationStream = async(conversationId: number): Promise<ConversationEventSourceInstance> => (
     // TODO use the auth token
-    new this.EventSource(`${this.baseURL}/conversation_stream/${conversationId}`)
+    new this.EventSource(`${this.baseURL}/public/conversations/${conversationId}/stream`)
   )
 }

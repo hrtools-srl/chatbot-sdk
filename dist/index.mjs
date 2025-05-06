@@ -210,13 +210,13 @@ var chat_default = (sdk) => (request) => __async(void 0, null, function* () {
 // src/operations/getConversation.ts
 var getConversation_default = (sdk) => (request) => sdk.call({
   method: "get",
-  url: `/get_conversation/${request.conversationId}`
+  url: `/public/conversations/${request.conversationId}`
 });
 
 // src/operations/listConversations.ts
 var listConversations_default = (sdk) => () => sdk.call({
   method: "get",
-  url: "/list_conversations"
+  url: "/public/conversations"
 });
 
 // src/operations/getConversationEventEmitter.ts
@@ -229,9 +229,18 @@ var getConversationEventEmitter_default = (sdk) => (request) => __async(void 0, 
 var sendMessage_default = (sdk) => (request) => __async(void 0, null, function* () {
   return sdk.call({
     method: "post",
-    url: "/send_message",
+    url: "/public/messages",
     data: request
   });
+});
+
+// src/operations/updateConversation.ts
+var updateConversation_default = (sdk) => (request) => sdk.call({
+  method: "patch",
+  url: `/public/conversations/${request.conversationId}`,
+  data: {
+    updates: request.updates
+  }
 });
 
 // src/index.ts
@@ -256,11 +265,13 @@ var ChatbotSDK = class {
     this.listConversations = listConversations_default(this);
     this.sendMessage = sendMessage_default(this);
     this.getConversationEventEmitter = getConversationEventEmitter_default(this);
+    this.updateConversation = updateConversation_default(this);
     this._getConversationStream = (conversationId) => __async(this, null, function* () {
-      return (
-        // TODO use the auth token
-        new this.EventSource(`${this.baseURL}/conversation_stream/${conversationId}`)
-      );
+      const url = new URL(`${this.baseURL}/public/conversations/${conversationId}/stream`);
+      if (this.authToken) {
+        url.searchParams.append("authToken", this.authToken);
+      }
+      return new this.EventSource(url);
     });
     if (config == null ? void 0 : config.EventSource) {
       this.EventSource = config.EventSource;
@@ -271,7 +282,7 @@ var ChatbotSDK = class {
       }
       this.EventSource = EventSource;
     }
-    this.baseURL = (config == null ? void 0 : config.baseUrl) || "https://api.hrtools.it";
+    this.baseURL = (config == null ? void 0 : config.baseUrl) || "https://chatbot.hrtools.it";
     this.axios = axios.create(__spreadValues({
       baseURL: this.baseURL
     }, axiosConfig || {}));

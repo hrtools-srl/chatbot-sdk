@@ -1,7 +1,76 @@
-import { EventEmitter } from 'events';
 import NodeEventSource from 'eventsource';
 import { FromSchema } from 'json-schema-to-ts';
+import { EventEmitter } from 'events';
 import { Axios, CreateAxiosDefaults, AxiosRequestConfig } from 'axios';
+
+declare const conversationSchema: {
+    readonly type: "object";
+    readonly properties: {
+        readonly id: {
+            readonly type: "number";
+        };
+        readonly title: {
+            readonly type: "string";
+        };
+        readonly creationTimestamp: {
+            readonly type: "string";
+            readonly format: "date-time";
+        };
+        readonly messages: {
+            readonly type: "array";
+            readonly items: {
+                readonly type: "object";
+                readonly additionalProperties: false;
+                readonly properties: {
+                    readonly status: {
+                        readonly type: "string";
+                    };
+                    readonly text: {
+                        readonly type: "string";
+                    };
+                    readonly response: {
+                        readonly type: ["string", "null"];
+                    };
+                    readonly error: {
+                        readonly type: ["string", "null"];
+                    };
+                    readonly id: {
+                        readonly type: "number";
+                    };
+                };
+                readonly required: ["status", "text", "response", "error", "id"];
+            };
+        };
+    };
+    readonly additionalProperties: false;
+    readonly required: ["id", "title", "creationTimestamp", "messages"];
+};
+
+type ChatbotSDKBaseConfig = {
+  authToken?: string,
+  baseUrl?: string,
+  EventSource?: ConversationEventSourceClass
+}
+
+type Conversation = FromSchema<typeof conversationSchema>
+
+type ConversationListItem = Pick<
+  Conversation,
+  "id" | "title" | "creationTimestamp"
+>
+
+type ConversationUpdate = ConversationListItem
+
+type ConversationEventSourceClass = typeof NodeEventSource | typeof EventSource
+type ConversationEventSourceInstance = InstanceType<ConversationEventSourceClass>
+
+type Request$4 = {
+    conversationId: number;
+    updates: {
+        title?: Conversation["title"];
+    };
+};
+type Response$5 = ConversationUpdate;
 
 type CommonStreamData = {
     messageId: number;
@@ -92,60 +161,7 @@ type Response$3 = {
     messageId: number;
 };
 
-declare const conversationSchema: {
-    readonly type: "object";
-    readonly properties: {
-        readonly id: {
-            readonly type: "number";
-        };
-        readonly userId: {
-            readonly type: "string";
-        };
-        readonly creationTimestamp: {
-            readonly type: "string";
-        };
-        readonly messages: {
-            readonly type: "array";
-            readonly items: {
-                readonly type: "object";
-                readonly additionalProperties: false;
-                readonly properties: {
-                    readonly status: {
-                        readonly type: "string";
-                    };
-                    readonly text: {
-                        readonly type: "string";
-                    };
-                    readonly response: {
-                        readonly type: ["string", "null"];
-                    };
-                    readonly error: {
-                        readonly type: ["string", "null"];
-                    };
-                    readonly id: {
-                        readonly type: "number";
-                    };
-                };
-                readonly required: ["status", "text", "response", "error", "id"];
-            };
-        };
-    };
-    readonly additionalProperties: false;
-    readonly required: ["id", "userId", "creationTimestamp", "messages"];
-};
-
-type ChatbotSDKBaseConfig = {
-  authToken?: string,
-  baseUrl?: string,
-  EventSource?: ConversationEventSourceClass
-}
-
-type Conversation = FromSchema<typeof conversationSchema>
-
-type ConversationEventSourceClass = typeof NodeEventSource | typeof EventSource
-type ConversationEventSourceInstance = InstanceType<ConversationEventSourceClass>
-
-type Response$2 = Conversation[];
+type Response$2 = ConversationListItem[];
 
 type Request$1 = {
     conversationId: number;
@@ -172,6 +188,7 @@ declare class ChatbotSDK {
     listConversations: () => Promise<Response$2>;
     sendMessage: (request: Request$2) => Promise<Response$3>;
     getConversationEventEmitter: (request: Request$3) => Promise<Response$4>;
+    updateConversation: (request: Request$4) => Promise<Response$5>;
     _getConversationStream: (conversationId: number) => Promise<ConversationEventSourceInstance>;
 }
 

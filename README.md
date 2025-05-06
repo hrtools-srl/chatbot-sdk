@@ -77,6 +77,21 @@ const conversations = await sdk.listConversations()
 console.log("Conversations:", conversations)
 ```
 
+## Method updateConversation
+
+Update conversation for the authenticated user.
+
+```ts
+const conversation = await sdk.updateConversation({
+  conversationId: 123,
+  updates: {
+    title: "New title"
+  }
+})
+
+console.log("Conversation:", conversation)
+```
+
 ## Method chat - without streaming
 
 Send a prompt to the chatbot and receive a response.

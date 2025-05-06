@@ -4,8 +4,8 @@ export const conversationSchema = {
   type: "object",
   properties: {
     id: { type: "number" },
-    userId: { type: "string" },
-    creationTimestamp: { type: "string" },
+    title: { type: "string" },
+    creationTimestamp: { type: "string", format: "date-time" },
     messages: {
       type: "array",
       items: {
@@ -23,5 +23,5 @@ export const conversationSchema = {
     },
   },
   additionalProperties: false,
-  required: ["id", "userId", "creationTimestamp", "messages"],
+  required: ["id", "title", "creationTimestamp", "messages"],
 } as const satisfies JSONSchema7

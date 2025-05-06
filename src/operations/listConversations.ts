@@ -1,7 +1,7 @@
 import ChatbotSDK from "$src"
-import { Conversation } from "$types/index"
+import { ConversationListItem } from "$types/index"
 
-export type Response = Conversation[]
+export type Response = ConversationListItem[]
 
 export default (sdk: ChatbotSDK) => (): Promise<Response> => (
   sdk.call({

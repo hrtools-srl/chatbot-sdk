@@ -6,6 +6,7 @@ import getConversation from "$operations/getConversation"
 import listConversations from "$operations/listConversations"
 import getConversationEventEmitter from "$operations/getConversationEventEmitter"
 import sendMessage from "$operations/sendMessage"
+import updateConversation from "./operations/updateConversation"
 
 export default class ChatbotSDK {
   axios: Axios
@@ -70,6 +71,7 @@ export default class ChatbotSDK {
   listConversations = listConversations(this)
   sendMessage = sendMessage(this)
   getConversationEventEmitter = getConversationEventEmitter(this)
+  updateConversation = updateConversation(this)
 
   _getConversationStream = async(conversationId: number): Promise<ConversationEventSourceInstance> => {
     const url = new URL(`${this.baseURL}/public/conversations/${conversationId}/stream`)

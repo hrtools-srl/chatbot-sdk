@@ -10,5 +10,12 @@ export type ChatbotSDKBaseConfig = {
 
 export type Conversation = FromSchema<typeof conversationSchema>
 
+export type ConversationListItem = Pick<
+  Conversation,
+  "id" | "title" | "creationTimestamp"
+>
+
+export type ConversationUpdate = ConversationListItem
+
 export type ConversationEventSourceClass = typeof NodeEventSource | typeof EventSource
 export type ConversationEventSourceInstance = InstanceType<ConversationEventSourceClass>

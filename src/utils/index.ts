@@ -25,6 +25,7 @@ export type ErrorStreamData = CommonStreamData & {
 
 export type EndStreamData = CommonStreamData & {
   type: "END",
+  iteration: number,
   data: {
     content: string,
     documents: StreamDocument[]
@@ -43,14 +44,16 @@ export type DocumentContextStreamData = CommonStreamData & {
 export type ChunkStreamData = CommonStreamData & {
   type: "CHUNK",
   content: string,
-  index: number
+  index: number,
+  iteration: number,
 }
 
 export type ChunkAggregateStreamData = CommonStreamData & {
   type: "CHUNK_AGGREGATE",
   fromIndex: number,
   toIndex: number,
-  content: string
+  content: string,
+  iteration: number,
 }
 
 export type StreamData = (

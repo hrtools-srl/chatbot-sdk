@@ -66,7 +66,8 @@ export type StreamData = (
 
 export type IterableChunkData = {
   content: string,
-  index: number
+  index: number,
+  iteration: number,
 }
 
 export type ConversationEventEmitterMap = {
@@ -171,7 +172,8 @@ export const messageEventSourceToAsyncIterable = (
       .with({ type: "CHUNK" }, (event) => {
         const value = {
           content: event.content,
-          index: event.index
+          index: event.index,
+          iteration: event.iteration
         }
 
         out._chunks.push(value)

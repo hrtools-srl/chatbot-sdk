@@ -56,12 +56,30 @@ export type ChunkAggregateStreamData = CommonStreamData & {
   iteration: number,
 }
 
+export type ToolCallStartStreamData = CommonStreamData & {
+  type: "TOOL_CALL_START",
+  iteration: number,
+  toolCallIndex: number,
+  tool: {
+    id: number,
+    name: string
+  }
+}
+
+export type ToolCallEndStreamData = CommonStreamData & {
+  type: "TOOL_CALL_END",
+  iteration: number,
+  toolCallIndex: number,
+}
+
 export type StreamData = (
   DocumentContextStreamData |
   ErrorStreamData |
   EndStreamData |
   ChunkStreamData |
-  ChunkAggregateStreamData
+  ChunkAggregateStreamData |
+  ToolCallStartStreamData |
+  ToolCallEndStreamData
 )
 
 export type IterableChunkData = {
@@ -77,6 +95,8 @@ export type ConversationEventEmitterMap = {
   "document-context": [DocumentContextStreamData],
   end: [EndStreamData],
   error: [unknown],
+  "tool-call-start": [ToolCallStartStreamData],
+  "tool-call-end": [ToolCallEndStreamData],
 }
 
 export type ConversationEventEmitter = EventEmitter<ConversationEventEmitterMap>
@@ -89,7 +109,18 @@ export type CompletionAsyncIterable = AsyncIterable<IterableChunkData> & {
     message: string
   } | null,
   partial: string,
-  _chunks: { content: string, index: number }[]
+  _chunks: { content: string, index: number }[],
+  toolCalls: {
+    iteration: number,
+    toolCallIndex: number,
+    tool: {
+      id: number,
+      name: string
+    },
+    finished: boolean,
+  }[],
+  emitter: ConversationEventEmitter,
+  complete: AsyncIterable<StreamData>
 }
 
 export const parseEventMessage = (event: MessageEvent) => {
@@ -98,7 +129,7 @@ export const parseEventMessage = (event: MessageEvent) => {
       const data = JSON.parse(event.data) as StreamData
       return data
     }
-  } catch (_) {}
+  } catch (_) { }
 
   return null
 }
@@ -115,6 +146,8 @@ export const conversationEventSourceToEventEmitter = (eventSource: EventSource):
       .with({ type: "END" }, (value) => emitter.emit("end", value))
       .with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value))
       .with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value))
+      .with({ type: "TOOL_CALL_START" }, (value) => emitter.emit("tool-call-start", value))
+      .with({ type: "TOOL_CALL_END" }, (value) => emitter.emit("tool-call-end", value))
       .exhaustive()
   }
 
@@ -133,29 +166,74 @@ export const conversationEventSourceToEventEmitter = (eventSource: EventSource):
   return emitter
 }
 
+// type Queue<T> = {
+//   waitForChunkResolveFunction: any,
+//   done: boolean,
+//   queue: T[],
+//   waitForChunk: () => Promise<void>,
+// }
+
+class Queue<T> {
+  done: boolean
+  queue: T[]
+  waitForChunkResolveFunction: any
+
+  constructor() {
+    this.done = false
+    this.queue = []
+    this.waitForChunkResolveFunction = undefined
+  }
+
+  waitForChunk() {
+    return new Promise((resolve) => this.waitForChunkResolveFunction = resolve)
+  }
+}
+
+// const getQueue = <T>() => {
+//   const out: Omit<Queue<T>, "waitForChunk"> = {
+//     done: false,
+//     queue: [],
+//     waitForChunkResolveFunction: undefined,
+//   }
+
+//   return {
+//     ...out,
+//     waitForChunk: () => (
+//       new Promise((resolve) => out.waitForChunkResolveFunction = resolve)
+//     ),
+//   }
+// }
+
 export const messageEventSourceToAsyncIterable = (
   eventSource: EventSource,
   messageId: number
 ) => {
-  let done = false
-  const queue: IterableChunkData[] = []
-  let waitForChunkResolveFunction: any = undefined
-
-  const waitForChunk = () => (
-    new Promise((resolve) => waitForChunkResolveFunction = resolve)
-  )
+  const chunksQueue = new Queue<IterableChunkData>()
+  const completeQueue = new Queue<StreamData>()
 
   function end() {
-    done = true
-    waitForChunkResolveFunction?.()
-    waitForChunkResolveFunction = undefined
+    chunksQueue.done = true
+    completeQueue.done = true
+
+    chunksQueue.waitForChunkResolveFunction?.()
+    chunksQueue.waitForChunkResolveFunction = undefined
+
+    completeQueue.waitForChunkResolveFunction?.()
+    completeQueue.waitForChunkResolveFunction = undefined
+
     eventSource.close()
   }
+
+  const parsedEmitter = conversationEventSourceToEventEmitter(eventSource)
 
   const processMessage = (event: StreamData) => {
     if (event.messageId !== messageId) {
       return
     }
+
+    completeQueue.queue.push(event)
+    completeQueue.waitForChunkResolveFunction?.()
+    completeQueue.waitForChunkResolveFunction = undefined
 
     match(event)
       .with({ type: "DOCUMENT_CONTEXT" }, (value) => {
@@ -177,30 +255,42 @@ export const messageEventSourceToAsyncIterable = (
         }
 
         out._chunks.push(value)
-        queue.push(value)
+        chunksQueue.queue.push(value)
 
-        waitForChunkResolveFunction?.()
-        waitForChunkResolveFunction = undefined
+        chunksQueue.waitForChunkResolveFunction?.()
+        chunksQueue.waitForChunkResolveFunction = undefined
       })
-      .with({ type: "CHUNK_AGGREGATE" }, () => {})
+      .with({ type: "CHUNK_AGGREGATE" }, () => { })
+      .with({ type: "TOOL_CALL_START" }, (event) => {
+        out.toolCalls.push({
+          iteration: event.iteration,
+          toolCallIndex: event.toolCallIndex,
+          tool: event.tool,
+          finished: false
+        })
+      })
+      .with({ type: "TOOL_CALL_END" }, (event) => {
+        const toolCall = out.toolCalls.find((call) => call.toolCallIndex === event.toolCallIndex)
+
+        if (toolCall) {
+          toolCall.finished = true
+        }
+      })
       .with({ type: "END" }, () => end())
       .exhaustive()
   }
 
-  eventSource.onerror = (error: any) => {}
-  eventSource.onmessage = (event: MessageEvent) => {
-    const data = parseEventMessage(event)
-
-    if (data) {
-      processMessage(data)
-    }
-  }
+  parsedEmitter.on("data", (event: StreamData) => {
+    processMessage(event)
+  })
 
   const out: CompletionAsyncIterable = {
     messageId,
     documents: null,
     error: null,
     _chunks: [],
+    toolCalls: [],
+    emitter: parsedEmitter,
 
     get partial() {
       return (
@@ -213,20 +303,39 @@ export const messageEventSourceToAsyncIterable = (
 
     async *[Symbol.asyncIterator]() {
       while (true) {
-        const value = queue.shift()
+        const value = chunksQueue.queue.shift()
 
         if (value) {
           yield value
         } else {
           // end() has been called. The queue is empty and no more chunks will be added
-          if (done) {
+          if (chunksQueue.done) {
             return
           }
 
           // No more chunks in the queue, wait for a new chunk
-          await waitForChunk()
+          await chunksQueue.waitForChunk()
         }
       }
+    },
+
+    complete: {
+      async *[Symbol.asyncIterator]() {
+        while (true) {
+          const value = completeQueue.queue.shift()
+          if (value) {
+            yield value
+          } else {
+            // end() has been called. The queue is empty and no more chunks will be added
+            if (completeQueue.done) {
+              return
+            }
+
+            // No more chunks in the queue, wait for a new chunk
+            await completeQueue.waitForChunk()
+          }
+        }
+      },
     }
   }
 
@@ -242,7 +351,7 @@ export type SyncResponse = {
 export const messageEventSourceToSyncResponse = async (
   eventSource: EventSource,
   messageId: number
-): Promise<SyncResponse> =>  {
+): Promise<SyncResponse> => {
   let resolve: any
   let reject: any
 

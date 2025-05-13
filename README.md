@@ -130,6 +130,23 @@ for await (const chunk of stream) {
 }
 
 console.log("RAG documents", stream.documents)
+console.log("Tool calls", stream.toolCalls)
+
+```
+
+You can also retrieve all the data using the complete stream object:
+
+```ts
+const stream = await sdk.chat({
+  conversationId: 123,
+  prompt: "Hello world!",
+  stream: true
+})
+
+for await (const item of stream.complete) {
+  const { item, ...rest } = item
+  console.log(`Received item of type ${item.type}:`, rest)
+}
 
 ```
 
@@ -159,6 +176,14 @@ emitter.on("document-context", (data) => {
   console.log("Related documents:", data.documents)
 })
 
+emitter.on("tool-call-start", (data) => {
+  console.log("Tool call started:", data)
+})
+
+emitter.on("tool-call-end", (data) => {
+  console.log("Tool call ended:", data)
+})
+
 emitter.on("end", () => {
   console.log("Streaming ended")
 })
@@ -178,8 +203,10 @@ The emitter provides the following events, corresponding to different types of s
 | `chunk`              | Fired for each content chunk received from the chatbot.              | `ChunkStreamData`                      |
 | `chunk-aggregate`    | Fired when multiple chunks are aggregated into a single message.     | `ChunkAggregateStreamData`             |
 | `document-context`   | Fired when the chatbot provides related document context.            | `DocumentContextStreamData`            |
+| `tool-call-start`    | Fired when a tool call starts.                                       | `ToolCallStartStreamData`              |
+| `tool-call-end`      | Fired when a tool call ends.                                         | `ToolCallEndStreamData`                |
 | `end`                | Fired when the stream finishes successfully.                         | `EndStreamData`                        |
-| `error`              | Fired when an error occurs during streaming or connection.           | `unknown`   |
+| `error`              | Fired when an error occurs during streaming or connection.           | `unknown`                              |
 
 ### Event Payload Types
 
@@ -217,6 +244,32 @@ The emitter provides the following events, corresponding to different types of s
     name: string,
     chunks: Array<{ id: number, content: string }>
   }>
+}
+```
+
+- **ToolCallStartStreamData**
+
+```ts
+{
+    type: "TOOL_CALL_START",
+    messageId: number,
+    iteration: number,
+    toolCallIndex: number,
+    tool: {
+        id: number;
+        name: string;
+    }
+}
+```
+
+- **ToolCallEndStreamData**
+
+```ts
+{
+  type: "TOOL_CALL_END",
+  messageId: number,
+  iteration: number,
+  toolCallIndex: number
 }
 ```
 

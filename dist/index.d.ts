@@ -37,8 +37,75 @@ declare const conversationSchema: {
                     readonly id: {
                         readonly type: "number";
                     };
+                    readonly chunks: {
+                        readonly type: "array";
+                        readonly items: {
+                            readonly type: "object";
+                            readonly additionalProperties: false;
+                            readonly properties: {
+                                readonly id: {
+                                    readonly type: "number";
+                                };
+                                readonly documentId: {
+                                    readonly type: "number";
+                                };
+                            };
+                            readonly required: ["id", "documentId"];
+                        };
+                    };
+                    readonly assistantResponses: {
+                        readonly type: "array";
+                        readonly items: {
+                            readonly type: "object";
+                            readonly additionalProperties: false;
+                            readonly properties: {
+                                readonly id: {
+                                    readonly type: "number";
+                                };
+                                readonly response: {
+                                    readonly type: "string";
+                                };
+                                readonly iteration: {
+                                    readonly type: "number";
+                                };
+                                readonly creationTimestamp: {
+                                    readonly type: "string";
+                                    readonly format: "date-time";
+                                };
+                                readonly toolCalls: {
+                                    readonly type: "array";
+                                    readonly items: {
+                                        readonly type: "object";
+                                        readonly additionalProperties: false;
+                                        readonly properties: {
+                                            readonly id: {
+                                                readonly type: "number";
+                                            };
+                                            readonly tool: {
+                                                readonly type: "object";
+                                                readonly additionalProperties: false;
+                                                readonly properties: {
+                                                    readonly id: {
+                                                        readonly type: "number";
+                                                    };
+                                                    readonly name: {
+                                                        readonly type: "string";
+                                                    };
+                                                };
+                                                readonly required: ["id", "name"];
+                                            };
+                                            readonly status: {
+                                                readonly type: "string";
+                                            };
+                                        };
+                                        readonly required: ["id", "tool", "status"];
+                                    };
+                                };
+                            };
+                        };
+                    };
                 };
-                readonly required: ["status", "text", "response", "error", "id"];
+                readonly required: ["status", "text", "response", "error", "id", "chunks", "assistantResponses"];
             };
         };
     };
@@ -91,6 +158,7 @@ type ErrorStreamData = CommonStreamData & {
 };
 type EndStreamData = CommonStreamData & {
     type: "END";
+    iteration: number;
     data: {
         content: string;
         documents: StreamDocument[];
@@ -108,17 +176,34 @@ type ChunkStreamData = CommonStreamData & {
     type: "CHUNK";
     content: string;
     index: number;
+    iteration: number;
 };
 type ChunkAggregateStreamData = CommonStreamData & {
     type: "CHUNK_AGGREGATE";
     fromIndex: number;
     toIndex: number;
     content: string;
+    iteration: number;
 };
-type StreamData = (DocumentContextStreamData | ErrorStreamData | EndStreamData | ChunkStreamData | ChunkAggregateStreamData);
+type ToolCallStartStreamData = CommonStreamData & {
+    type: "TOOL_CALL_START";
+    iteration: number;
+    toolCallIndex: number;
+    tool: {
+        id: number;
+        name: string;
+    };
+};
+type ToolCallEndStreamData = CommonStreamData & {
+    type: "TOOL_CALL_END";
+    iteration: number;
+    toolCallIndex: number;
+};
+type StreamData = (DocumentContextStreamData | ErrorStreamData | EndStreamData | ChunkStreamData | ChunkAggregateStreamData | ToolCallStartStreamData | ToolCallEndStreamData);
 type IterableChunkData = {
     content: string;
     index: number;
+    iteration: number;
 };
 type ConversationEventEmitterMap = {
     data: [StreamData];
@@ -127,6 +212,8 @@ type ConversationEventEmitterMap = {
     "document-context": [DocumentContextStreamData];
     end: [EndStreamData];
     error: [unknown];
+    "tool-call-start": [ToolCallStartStreamData];
+    "tool-call-end": [ToolCallEndStreamData];
 };
 type ConversationEventEmitter = EventEmitter<ConversationEventEmitterMap>;
 type CompletionAsyncIterable = AsyncIterable<IterableChunkData> & {
@@ -141,6 +228,17 @@ type CompletionAsyncIterable = AsyncIterable<IterableChunkData> & {
         content: string;
         index: number;
     }[];
+    toolCalls: {
+        iteration: number;
+        toolCallIndex: number;
+        tool: {
+            id: number;
+            name: string;
+        };
+        finished: boolean;
+    }[];
+    emitter: ConversationEventEmitter;
+    complete: AsyncIterable<StreamData>;
 };
 type SyncResponse = {
     messageId: number;

@@ -68,7 +68,7 @@ var conversationEventSourceToEventEmitter = (eventSource) => {
   const emitter = new EventEmitter();
   const processMessage = (event) => {
     emitter.emit("data", event);
-    match(event).with({ type: "DOCUMENT_CONTEXT" }, (value) => emitter.emit("document-context", value)).with({ type: "ERROR" }, (value) => emitter.emit("error", value)).with({ type: "END" }, (value) => emitter.emit("end", value)).with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value)).with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value)).exhaustive();
+    match(event).with({ type: "DOCUMENT_CONTEXT" }, (value) => emitter.emit("document-context", value)).with({ type: "ERROR" }, (value) => emitter.emit("error", value)).with({ type: "END" }, (value) => emitter.emit("end", value)).with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value)).with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value)).with({ type: "TOOL_CALL_START" }, (value) => emitter.emit("tool-call-start", value)).with({ type: "TOOL_CALL_END" }, (value) => emitter.emit("tool-call-end", value)).exhaustive();
   };
   eventSource.onmessage = (event) => {
     const data = parseEventMessage(event);
@@ -81,21 +81,38 @@ var conversationEventSourceToEventEmitter = (eventSource) => {
   };
   return emitter;
 };
+var Queue = class {
+  constructor() {
+    this.done = false;
+    this.queue = [];
+    this.waitForChunkResolveFunction = void 0;
+  }
+  waitForChunk() {
+    return new Promise((resolve) => this.waitForChunkResolveFunction = resolve);
+  }
+};
 var messageEventSourceToAsyncIterable = (eventSource, messageId) => {
-  let done = false;
-  const queue = [];
-  let waitForChunkResolveFunction = void 0;
-  const waitForChunk = () => new Promise((resolve) => waitForChunkResolveFunction = resolve);
+  const chunksQueue = new Queue();
+  const completeQueue = new Queue();
   function end() {
-    done = true;
-    waitForChunkResolveFunction == null ? void 0 : waitForChunkResolveFunction();
-    waitForChunkResolveFunction = void 0;
+    var _a2, _b2;
+    chunksQueue.done = true;
+    completeQueue.done = true;
+    (_a2 = chunksQueue.waitForChunkResolveFunction) == null ? void 0 : _a2.call(chunksQueue);
+    chunksQueue.waitForChunkResolveFunction = void 0;
+    (_b2 = completeQueue.waitForChunkResolveFunction) == null ? void 0 : _b2.call(completeQueue);
+    completeQueue.waitForChunkResolveFunction = void 0;
     eventSource.close();
   }
+  const parsedEmitter = conversationEventSourceToEventEmitter(eventSource);
   const processMessage = (event) => {
+    var _a2;
     if (event.messageId !== messageId) {
       return;
     }
+    completeQueue.queue.push(event);
+    (_a2 = completeQueue.waitForChunkResolveFunction) == null ? void 0 : _a2.call(completeQueue);
+    completeQueue.waitForChunkResolveFunction = void 0;
     match(event).with({ type: "DOCUMENT_CONTEXT" }, (value) => {
       out.documents = value.documents;
     }).with({ type: "ERROR" }, (value) => {
@@ -105,47 +122,75 @@ var messageEventSourceToAsyncIterable = (eventSource, messageId) => {
       };
       end();
     }).with({ type: "CHUNK" }, (event2) => {
+      var _a3;
       const value = {
         content: event2.content,
-        index: event2.index
+        index: event2.index,
+        iteration: event2.iteration
       };
       out._chunks.push(value);
-      queue.push(value);
-      waitForChunkResolveFunction == null ? void 0 : waitForChunkResolveFunction();
-      waitForChunkResolveFunction = void 0;
+      chunksQueue.queue.push(value);
+      (_a3 = chunksQueue.waitForChunkResolveFunction) == null ? void 0 : _a3.call(chunksQueue);
+      chunksQueue.waitForChunkResolveFunction = void 0;
     }).with({ type: "CHUNK_AGGREGATE" }, () => {
+    }).with({ type: "TOOL_CALL_START" }, (event2) => {
+      out.toolCalls.push({
+        iteration: event2.iteration,
+        toolCallIndex: event2.toolCallIndex,
+        tool: event2.tool,
+        finished: false
+      });
+    }).with({ type: "TOOL_CALL_END" }, (event2) => {
+      const toolCall = out.toolCalls.find((call) => call.toolCallIndex === event2.toolCallIndex);
+      if (toolCall) {
+        toolCall.finished = true;
+      }
     }).with({ type: "END" }, () => end()).exhaustive();
   };
-  eventSource.onerror = (error) => {
-  };
-  eventSource.onmessage = (event) => {
-    const data = parseEventMessage(event);
-    if (data) {
-      processMessage(data);
-    }
-  };
+  parsedEmitter.on("data", (event) => {
+    processMessage(event);
+  });
   const out = {
     messageId,
     documents: null,
     error: null,
     _chunks: [],
+    toolCalls: [],
+    emitter: parsedEmitter,
     get partial() {
       return this._chunks.sort((a, b) => a.index - b.index).map((chunk) => chunk.content).join("");
     },
     [Symbol.asyncIterator]() {
       return __asyncGenerator(this, null, function* () {
         while (true) {
-          const value = queue.shift();
+          const value = chunksQueue.queue.shift();
           if (value) {
             yield value;
           } else {
-            if (done) {
+            if (chunksQueue.done) {
               return;
             }
-            yield new __await(waitForChunk());
+            yield new __await(chunksQueue.waitForChunk());
           }
         }
       });
+    },
+    complete: {
+      [Symbol.asyncIterator]() {
+        return __asyncGenerator(this, null, function* () {
+          while (true) {
+            const value = completeQueue.queue.shift();
+            if (value) {
+              yield value;
+            } else {
+              if (completeQueue.done) {
+                return;
+              }
+              yield new __await(completeQueue.waitForChunk());
+            }
+          }
+        });
+      }
     }
   };
   return out;

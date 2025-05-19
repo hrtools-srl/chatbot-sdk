@@ -202,7 +202,6 @@ The emitter provides the following events, corresponding to different types of s
 | `data`               | Fired for every received stream data (raw event).                    | `StreamData`                           |
 | `chunk`              | Fired for each content chunk received from the chatbot.              | `ChunkStreamData`                      |
 | `chunk-aggregate`    | Fired when multiple chunks are aggregated into a single message.     | `ChunkAggregateStreamData`             |
-| `document-context`   | Fired when the chatbot provides related document context.            | `DocumentContextStreamData`            |
 | `tool-call-start`    | Fired when a tool call starts.                                       | `ToolCallStartStreamData`              |
 | `tool-call-end`      | Fired when a tool call ends.                                         | `ToolCallEndStreamData`                |
 | `end`                | Fired when the stream finishes successfully.                         | `EndStreamData`                        |
@@ -230,20 +229,6 @@ The emitter provides the following events, corresponding to different types of s
   fromIndex: number,
   toIndex: number,
   content: string
-}
-```
-
-- **DocumentContextStreamData**
-
-```ts
-{
-  type: "DOCUMENT_CONTEXT",
-  messageId: number,
-  documents: Array<{
-    id: number,
-    name: string,
-    chunks: Array<{ id: number, content: string }>
-  }>
 }
 ```
 

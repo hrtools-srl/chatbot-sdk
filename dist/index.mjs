@@ -68,7 +68,7 @@ var conversationEventSourceToEventEmitter = (eventSource) => {
   const emitter = new EventEmitter();
   const processMessage = (event) => {
     emitter.emit("data", event);
-    match(event).with({ type: "DOCUMENT_CONTEXT" }, (value) => emitter.emit("document-context", value)).with({ type: "ERROR" }, (value) => emitter.emit("error", value)).with({ type: "END" }, (value) => emitter.emit("end", value)).with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value)).with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value)).with({ type: "TOOL_CALL_START" }, (value) => emitter.emit("tool-call-start", value)).with({ type: "TOOL_CALL_END" }, (value) => emitter.emit("tool-call-end", value)).exhaustive();
+    match(event).with({ type: "ERROR" }, (value) => emitter.emit("error", value)).with({ type: "END" }, (value) => emitter.emit("end", value)).with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value)).with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value)).with({ type: "TOOL_CALL_START" }, (value) => emitter.emit("tool-call-start", value)).with({ type: "TOOL_CALL_END" }, (value) => emitter.emit("tool-call-end", value)).exhaustive();
   };
   eventSource.onmessage = (event) => {
     const data = parseEventMessage(event);
@@ -113,9 +113,7 @@ var messageEventSourceToAsyncIterable = (eventSource, messageId) => {
     completeQueue.queue.push(event);
     (_a2 = completeQueue.waitForChunkResolveFunction) == null ? void 0 : _a2.call(completeQueue);
     completeQueue.waitForChunkResolveFunction = void 0;
-    match(event).with({ type: "DOCUMENT_CONTEXT" }, (value) => {
-      out.documents = value.documents;
-    }).with({ type: "ERROR" }, (value) => {
+    match(event).with({ type: "ERROR" }, (value) => {
       out.error = {
         code: value.code,
         message: value.message

@@ -168,10 +168,6 @@ type EndStreamData = CommonStreamData & {
         message: string;
     } | null;
 };
-type DocumentContextStreamData = CommonStreamData & {
-    type: "DOCUMENT_CONTEXT";
-    documents: StreamDocument[];
-};
 type ChunkStreamData = CommonStreamData & {
     type: "CHUNK";
     content: string;
@@ -199,7 +195,7 @@ type ToolCallEndStreamData = CommonStreamData & {
     iteration: number;
     toolCallIndex: number;
 };
-type StreamData = (DocumentContextStreamData | ErrorStreamData | EndStreamData | ChunkStreamData | ChunkAggregateStreamData | ToolCallStartStreamData | ToolCallEndStreamData);
+type StreamData = (ErrorStreamData | EndStreamData | ChunkStreamData | ChunkAggregateStreamData | ToolCallStartStreamData | ToolCallEndStreamData);
 type IterableChunkData = {
     content: string;
     index: number;
@@ -209,7 +205,6 @@ type ConversationEventEmitterMap = {
     data: [StreamData];
     chunk: [ChunkStreamData];
     "chunk-aggregate": [ChunkAggregateStreamData];
-    "document-context": [DocumentContextStreamData];
     end: [EndStreamData];
     error: [unknown];
     "tool-call-start": [ToolCallStartStreamData];

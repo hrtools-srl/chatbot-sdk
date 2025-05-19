@@ -36,11 +36,6 @@ export type EndStreamData = CommonStreamData & {
   } | null
 }
 
-export type DocumentContextStreamData = CommonStreamData & {
-  type: "DOCUMENT_CONTEXT",
-  documents: StreamDocument[]
-}
-
 export type ChunkStreamData = CommonStreamData & {
   type: "CHUNK",
   content: string,
@@ -73,7 +68,6 @@ export type ToolCallEndStreamData = CommonStreamData & {
 }
 
 export type StreamData = (
-  DocumentContextStreamData |
   ErrorStreamData |
   EndStreamData |
   ChunkStreamData |
@@ -92,7 +86,6 @@ export type ConversationEventEmitterMap = {
   data: [StreamData],
   chunk: [ChunkStreamData],
   "chunk-aggregate": [ChunkAggregateStreamData],
-  "document-context": [DocumentContextStreamData],
   end: [EndStreamData],
   error: [unknown],
   "tool-call-start": [ToolCallStartStreamData],
@@ -141,7 +134,6 @@ export const conversationEventSourceToEventEmitter = (eventSource: EventSource):
     emitter.emit("data", event)
 
     match(event)
-      .with({ type: "DOCUMENT_CONTEXT" }, (value) => emitter.emit("document-context", value))
       .with({ type: "ERROR" }, (value) => emitter.emit("error", value))
       .with({ type: "END" }, (value) => emitter.emit("end", value))
       .with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value))
@@ -236,9 +228,6 @@ export const messageEventSourceToAsyncIterable = (
     completeQueue.waitForChunkResolveFunction = undefined
 
     match(event)
-      .with({ type: "DOCUMENT_CONTEXT" }, (value) => {
-        out.documents = value.documents
-      })
       .with({ type: "ERROR" }, (value) => {
         out.error = {
           code: value.code,

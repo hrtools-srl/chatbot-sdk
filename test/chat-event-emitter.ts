@@ -24,9 +24,10 @@ void(async() => {
     process.stdout.write(data.content)
   })
 
-  evt.on("end", () => {
+  evt.on("end", (data) => {
     console.log("\n")
     console.log("Stream ended")
+    console.log("Data", JSON.stringify(data, null, 2))
     process.exit(0)
   })
 

@@ -265,7 +265,10 @@ export const messageEventSourceToAsyncIterable = (
           toolCall.finished = true
         }
       })
-      .with({ type: "END" }, () => end())
+      .with({ type: "END" }, (event) => {
+        out.documents = event.data?.documents || null
+        end()
+      })
       .otherwise(() => {})
   }
 

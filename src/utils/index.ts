@@ -140,7 +140,7 @@ export const conversationEventSourceToEventEmitter = (eventSource: EventSource):
       .with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value))
       .with({ type: "TOOL_CALL_START" }, (value) => emitter.emit("tool-call-start", value))
       .with({ type: "TOOL_CALL_END" }, (value) => emitter.emit("tool-call-end", value))
-      .exhaustive()
+      .otherwise(() => {})
   }
 
   eventSource.onmessage = (event: MessageEvent) => {
@@ -266,7 +266,7 @@ export const messageEventSourceToAsyncIterable = (
         }
       })
       .with({ type: "END" }, () => end())
-      .exhaustive()
+      .otherwise(() => {})
   }
 
   parsedEmitter.on("data", (event: StreamData) => {

@@ -20,10 +20,6 @@ void(async() => {
     conversationId: +CONVERSATION_ID
   })
 
-  evt.on("document-context", (data) => {
-    console.log("Documents:", data.documents)
-  })
-
   evt.on("chunk", (data) => {
     process.stdout.write(data.content)
   })

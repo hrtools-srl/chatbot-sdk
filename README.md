@@ -172,10 +172,6 @@ emitter.on("chunk-aggregate", (data) => {
   console.log("Aggregated content from chunks:", data.content)
 })
 
-emitter.on("document-context", (data) => {
-  console.log("Related documents:", data.documents)
-})
-
 emitter.on("tool-call-start", (data) => {
   console.log("Tool call started:", data)
 })

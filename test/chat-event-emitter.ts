@@ -20,17 +20,14 @@ void(async() => {
     conversationId: +CONVERSATION_ID
   })
 
-  evt.on("document-context", (data) => {
-    console.log("Documents:", data.documents)
-  })
-
   evt.on("chunk", (data) => {
     process.stdout.write(data.content)
   })
 
-  evt.on("end", () => {
+  evt.on("end", (data) => {
     console.log("\n")
     console.log("Stream ended")
+    console.log("Data", JSON.stringify(data, null, 2))
     process.exit(0)
   })
 

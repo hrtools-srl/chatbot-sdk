@@ -30,7 +30,7 @@ void(async() => {
   }
 
   console.log("\n")
-  console.log("Documents:", stream.documents)
+  console.log("Documents:", JSON.stringify(stream.documents, null, 2))
 
 })()
   .catch((e) => {

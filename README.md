@@ -144,8 +144,8 @@ const stream = await sdk.chat({
 })
 
 for await (const item of stream.complete) {
-  const { item, ...rest } = item
-  console.log(`Received item of type ${item.type}:`, rest)
+  const { type, ...rest } = item
+  console.log(`Received item of type ${type}:`, rest)
 }
 
 ```
@@ -172,10 +172,6 @@ emitter.on("chunk-aggregate", (data) => {
   console.log("Aggregated content from chunks:", data.content)
 })
 
-emitter.on("document-context", (data) => {
-  console.log("Related documents:", data.documents)
-})
-
 emitter.on("tool-call-start", (data) => {
   console.log("Tool call started:", data)
 })
@@ -184,8 +180,9 @@ emitter.on("tool-call-end", (data) => {
   console.log("Tool call ended:", data)
 })
 
-emitter.on("end", () => {
+emitter.on("end", (data) => {
   console.log("Streaming ended")
+  console.log("Data:" JSON.stringify(data, null, 2))
 })
 
 emitter.on("error", (err) => {

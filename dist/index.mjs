@@ -68,7 +68,8 @@ var conversationEventSourceToEventEmitter = (eventSource) => {
   const emitter = new EventEmitter();
   const processMessage = (event) => {
     emitter.emit("data", event);
-    match(event).with({ type: "ERROR" }, (value) => emitter.emit("error", value)).with({ type: "END" }, (value) => emitter.emit("end", value)).with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value)).with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value)).with({ type: "TOOL_CALL_START" }, (value) => emitter.emit("tool-call-start", value)).with({ type: "TOOL_CALL_END" }, (value) => emitter.emit("tool-call-end", value)).exhaustive();
+    match(event).with({ type: "ERROR" }, (value) => emitter.emit("error", value)).with({ type: "END" }, (value) => emitter.emit("end", value)).with({ type: "CHUNK" }, (value) => emitter.emit("chunk", value)).with({ type: "CHUNK_AGGREGATE" }, (value) => emitter.emit("chunk-aggregate", value)).with({ type: "TOOL_CALL_START" }, (value) => emitter.emit("tool-call-start", value)).with({ type: "TOOL_CALL_END" }, (value) => emitter.emit("tool-call-end", value)).otherwise(() => {
+    });
   };
   eventSource.onmessage = (event) => {
     const data = parseEventMessage(event);
@@ -143,7 +144,12 @@ var messageEventSourceToAsyncIterable = (eventSource, messageId) => {
       if (toolCall) {
         toolCall.finished = true;
       }
-    }).with({ type: "END" }, () => end()).exhaustive();
+    }).with({ type: "END" }, (event2) => {
+      var _a3;
+      out.documents = ((_a3 = event2.data) == null ? void 0 : _a3.documents) || null;
+      end();
+    }).otherwise(() => {
+    });
   };
   parsedEmitter.on("data", (event) => {
     processMessage(event);
